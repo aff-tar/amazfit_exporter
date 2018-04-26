@@ -2,70 +2,197 @@
 import sqlite3 as lite
 import sys
 import datetime
+import time as t
 import os
-def db_to_gpx(db,dest):
-	con = lite.connect(db)
+import json
+from collections import deque
 
+def db_to_tcx(db,dest,begtime,tz):
+	print ('db: '+ str(db))
+	print ('dest: '+ str(dest))
+	print ('begtime: '+ str(begtime))
+
+	# Connect to the sport database
+	con = lite.connect(db)
 	with con:
-	    
-		cur = con.cursor()    
-		cur.execute('SELECT track_id, start_time from sport_summary where type=2 or type=1')
+		cur = con.cursor()
+		#cur.execute('SELECT track_id, start_time, type, content from sport_summary where track_id >'+ str(begtime) + ' and (type=1 or type=2 or type=3 or type=4 or type=5)')
+		cur.execute('SELECT track_id, start_time, type, content from sport_summary where track_id >'+ str(begtime) + '')
 		running_sessions = cur.fetchall()
+		#print ('running_sessions: '+ str(running_sessions))
 		for running_session in running_sessions:
+			# load the summary information JSON
+			content_json = json.loads(running_session[3])
+			# Get the track ID and starting time
 			track_id=running_session[0]
 			tiempo_init=running_session[1]
-			cur.execute('SELECT location_data.latitude, location_data.longitude, location_data.altitude, location_data.timestamp from location_data, sport_summary where location_data.track_id=' + str(track_id) + ' and sport_summary.type=2 ')
-			datos = cur.fetchall()
-			year=datetime.datetime.fromtimestamp(running_session[1]/1000).strftime('%Y')
-			month=datetime.datetime.fromtimestamp(running_session[1]/1000).strftime('%m')
-			day=datetime.datetime.fromtimestamp(running_session[1]/1000).strftime('%d')
-			hour=datetime.datetime.fromtimestamp(running_session[1]/1000).strftime('%H')
-			minute=datetime.datetime.fromtimestamp(running_session[1]/1000).strftime('%M')
-			second=datetime.datetime.fromtimestamp(running_session[1]/1000).strftime('%S')
+			sportType = int(running_session[2])
+			print ('track_id: '+ str(track_id))
+			print ('sportType: '+ str(sportType))
+			# find out what type of activity it is
+			if sportType == 1:
+				activity = "unknwon"
+			elif sportType == 2:
+				activity = "unknwon"
+			elif sportType == 3:
+				activity = "unknwon"
+			elif sportType == 4:
+				activity = "unknwon"
+			elif sportType == 5:
+				activity = "unknwon"
+			elif sportType == 6:
+				activity = "walking"
+			elif sportType == 7:
+				activity = "unknwon"
+			elif sportType == 8:
+				activity = "treadmill"
+			elif sportType == 9:
+				activity = "cycling"
+			elif sportType == 10:
+				activity = "unknwon"
+			elif sportType == 11:
+				activity = "unknwon"
+			elif sportType == 12:
+				activity = "gym"
+			elif sportType == 13:
+				activity = "unknwon"
+			elif sportType == 14:
+				activity = "pool"
+			elif sportType == 15:
+				activity = "unknwon"
+			elif sportType == 16:
+				activity = "unknwon"
+			elif sportType == 17:
+				activity = "unknwon"
+			elif sportType == 18:
+				activity = "soccer"
+			else:
+				activity = "unknwon"
+			#initialize
+			cad = deque([])
+			stride = 0
+			cad_avg = 0
+			step_cum = 0
+			# calculate stride length for treadmill runs because Amazfit stride info is incorrect
+			step_tot = content_json['step_count']
+			dist_tot = content_json['distance']
+			if step_tot > 0:
+				stride = dist_tot/step_tot
+			dist = 0
+			session_strt = running_session[1]/1000+tz
+			year=datetime.datetime.utcfromtimestamp(session_strt).strftime('%Y')
+			month=datetime.datetime.utcfromtimestamp(session_strt).strftime('%m')
+			day=datetime.datetime.utcfromtimestamp(session_strt).strftime('%d')
+			hour=datetime.datetime.utcfromtimestamp(session_strt).strftime('%H')
+			minute=datetime.datetime.utcfromtimestamp(session_strt).strftime('%M')
+			second=datetime.datetime.utcfromtimestamp(session_strt).strftime('%S')
+			dest_file=dest+'/'+year+'-'+month+'-'+day+'_'+hour+'-'+minute+'Z'+'_'+activity+'.tcx'
 			try:
-				os.remove(dest+'/'+year+month+day+'_'+hour+minute+second+'.gpx')
+				os.remove(dest_file)
 			except OSError:
 				pass
-			with open(dest+'/'+year+month+day+'_'+hour+minute+second+'.gpx', 'a') as out:	
-				out.write('<?xml version="1.0" encoding="UTF-8"?>' + '\r\n')
-				out.write('<gpx version="1.1" creator="Amazfit_export by dvd_ath" xsi:schemaLocation="http://www.topografix.com/GPX/1/1' + '\r\n')
-				out.write('                                 http://www.topografix.com/GPX/1/1/gpx.xsd' + '\r\n')
-				out.write('                                 http://www.garmin.com/xmlschemas/GpxExtensions/v3' + '\r\n')
-				out.write('                                 http://www.garmin.com/xmlschemas/GpxExtensionsv3.xsd' + '\r\n')
-				out.write('		                            http://www.garmin.com/xmlschemas/TrackPointExtension/v1' + '\r\n')
-				out.write('                                 http://www.garmin.com/xmlschemas/TrackPointExtensionv1.xsd" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' + '\r\n')
-				out.write(' <metadata>'  + '\r\n')
-				out.write('  <link href="https://github.com/botmakerdvd/amazfit_exporter">'+ '\r\n')
-				out.write('    <text>Amazfit exporter</text>'+ '\r\n')
-				out.write('  </link>'+ '\r\n')
-				out.write('  <time>'+year+'-'+month+'-'+day+'T'+hour+':'+minute+':'+second+'.000Z</time>'+ '\r\n')
-				out.write(' </metadata>'+ '\r\n')
-				out.write(' <trk>'+ '\r\n')
-				out.write('  <trkseg>'+ '\r\n')
-				for dato in datos:
-					latitud=str(dato[0])
-					longitud=str(dato[1])
-					altitud=str(round(dato[2],1))
-					time=((dato[3]+tiempo_init)/1000)
-					year=datetime.datetime.fromtimestamp(time).strftime('%Y')
-					month=datetime.datetime.fromtimestamp(time).strftime('%m')
-					day=datetime.datetime.fromtimestamp(time).strftime('%d')
-					hour=datetime.datetime.fromtimestamp(time).strftime('%H')
-					minute=datetime.datetime.fromtimestamp(time).strftime('%M')
-					second=datetime.datetime.fromtimestamp(time).strftime('%S')			
-					cur.execute('SELECT rate from heart_rate where time=' + str(round(time)*1000))
-					rate=cur.fetchone()
-					out.write('   <trkpt lon="'+longitud+'" lat="'+latitud+'">'+ '\r\n')
-					out.write('    <ele>'+altitud+'</ele>'+ '\r\n')
-					out.write('    <time>'+year+'-'+month+'-'+day+'T'+hour+':'+minute+':'+second+'.000Z</time>'+ '\r\n')
-					if rate is not None:
-						out.write('    <extensions>'+ '\r\n')
-						out.write('     <gpxtpx:TrackPointExtension>'+ '\r\n')
-						out.write(' 	 <gpxtpx:hr>'+str(int(rate[0]))+'</gpxtpx:hr>'+ '\r\n')
-						out.write('     </gpxtpx:TrackPointExtension>'+ '\r\n')
-						out.write('    </extensions>'+ '\r\n')
-					out.write('   </trkpt>'+ '\r\n')
-				out.write('  </trkseg>'+ '\r\n')
-				out.write(' </trk>'+ '\r\n')
-				out.write('</gpx>'+ '\r\n')
+			with open(dest_file, 'a') as out:
+				# Write Header
+				print(t.strftime('%Y-%m-%d %H:%M:%S', t.localtime(session_strt))+' activity:' + activity + ' syncing...')
+				out.write('<?xml version="1.0" encoding="UTF-8"?>' + '\n')
+				out.write('<TrainingCenterDatabase xsi:schemaLocation="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd" xmlns:ns5="http://www.garmin.com/xmlschemas/ActivityGoals/v1" xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2" xmlns:ns2="http://www.garmin.com/xmlschemas/UserProfile/v2" xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' + '\n')
+				out.write(' <Activities>' + '\n')
+				out.write('  <Activity Sport="'+ activity + '">' + '\n')
+				out.write('   <Id>'+year+'-'+month+'-'+day+'T'+hour+':'+minute+':'+second+ 'Z'+ '</Id>'+ '\n')
+				out.write('   <Creator><Name>Huami Amazfit Stratos</Name></Creator>\n')
+				out.write('   <Lap StartTime="'+ year+'-'+month+'-'+day+'T'+hour+':'+minute+':'+second +'Z">' + '\n')
+				out.write('    <Track>' + '\n')
+
+				# Going to get the different datos depending on whether it is a GPX or a indoor stationary activity
+				if (activity == "treadmill") or (activity == "gym") or (activity == "pool"):
+					cur.execute('SELECT rate, step_count, time from heart_rate where track_id=' + str(track_id))
+					datos = cur.fetchall()
+					#print(str(datos))
+					for dato in datos:
+						#print(str(dato))
+						time=dato[2]/1000+tz
+						year=datetime.datetime.utcfromtimestamp(time).strftime('%Y')
+						month=datetime.datetime.utcfromtimestamp(time).strftime('%m')
+						day=datetime.datetime.utcfromtimestamp(time).strftime('%d')
+						hour=datetime.datetime.utcfromtimestamp(time).strftime('%H')
+						minute=datetime.datetime.utcfromtimestamp(time).strftime('%M')
+						second=datetime.datetime.utcfromtimestamp(time).strftime('%S')
+						# Write the trackpoint
+						out.write('     <Trackpoint>' + '\n')
+						out.write('      <Time>'+year+'-'+month+'-'+day+'T'+hour+':'+minute+':'+second+ 'Z</Time>'+ '\n')
+						# Calculate the distance based on cumualtive steps
+						step_cum = step_cum + dato[1]
+						dist = step_cum * stride
+						out.write('      <DistanceMeters>'+ str(dist) + '</DistanceMeters>' + '\n')
+						# Check that you have a valid HR reading
+						if dato[0] > 0:
+							# Write the HR
+							out.write('      <HeartRateBpm>' + '\n')
+							out.write('       <Value>'+ str(dato[0]) +'</Value>' + '\n')
+							out.write('      </HeartRateBpm>' + '\n')
+						# push the new step count in and recalculate the cadence
+						if dato[1] > 0:
+							cad.append(dato[1])
+						if len(cad) > 30:
+							cad.popleft()
+							cad_avg = int(sum(cad)/len(cad)*30)
+							#Write the cadence
+							out.write('      <Extensions>'+ '\n')
+							out.write('       <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">'+ '\n')
+							out.write('        <RunCadence>'+ str(cad_avg) + '</RunCadence>' + '\n')
+							out.write('       </TPX>' + '\n')
+							out.write('      </Extensions>'+ '\n')
+						out.write('     </Trackpoint>' + '\n')
+				else:
+				# ignore false and extra data points.  Also fixed the bug generating duplicate data.
+					cur.execute('SELECT location_data.latitude, location_data.longitude, location_data.altitude, location_data.timestamp from location_data where location_data.track_id=' + str(track_id) + ' and location_data.point_type > 0')
+					datos = cur.fetchall()
+					for dato in datos:
+						latitud=str(dato[0])
+						longitud=str(dato[1])
+						altitud = str(round(dato[2],1))
+						time=((dato[3] +tiempo_init)/1000)
+						year=datetime.datetime.utcfromtimestamp(time).strftime('%Y')
+						month=datetime.datetime.utcfromtimestamp(time).strftime('%m')
+						day=datetime.datetime.utcfromtimestamp(time).strftime('%d')
+						hour=datetime.datetime.utcfromtimestamp(time).strftime('%H')
+						minute=datetime.datetime.utcfromtimestamp(time).strftime('%M')
+						second=datetime.datetime.utcfromtimestamp(time).strftime('%S')
+						# Make it prettier and more flexible in the future
+						cur.execute('SELECT rate,step_count from heart_rate where heart_rate.time = ?', (round(time)*1000,))
+						rate=cur.fetchone()
+						# Write the trackpoint
+						out.write('     <Trackpoint>' + '\n')
+						out.write('      <Time>'+year+'-'+month+'-'+day+'T'+hour+':'+minute+':'+second+ 'Z</Time>'+ '\n')
+						out.write('      <Position>' + '\n')
+						out.write('       <LatitudeDegrees>' + latitud + '</LatitudeDegrees>' + '\n')
+						out.write('       <LongitudeDegrees>' + longitud + '</LongitudeDegrees>' + '\n')
+						out.write('      </Position>' + '\n')
+						# only write altitude if valid (greater than -1000 meters)
+						if dato[2] > -1000:
+							out.write('      <AltitudeMeters>'+altitud+'</AltitudeMeters>' + '\n')
+						# Check that you have a valid HR reading
+						if rate is not None and rate[0] > 0:
+							# Write the HR
+							out.write('      <HeartRateBpm>' + '\n')
+							out.write('       <Value>'+ str(rate[0]) +'</Value>' + '\n')
+							out.write('      </HeartRateBpm>' + '\n')
+							# push the new step count in and recalculate the cadence
+							if rate[1] > 0:
+								cad.append(rate[1])
+							if len(cad) > 30:
+								cad.popleft()
+								cad_avg = int(sum(cad)/len(cad)*30)
+								#Write the cadence
+								out.write('      <Extensions>'+ '\n')
+								out.write('       <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">'+ '\n')
+								out.write('        <RunCadence>'+ str(cad_avg) + '</RunCadence>' + '\n')
+								out.write('       </TPX>' + '\n')
+								out.write('      </Extensions>'+ '\n')
+						out.write('     </Trackpoint>' + '\n')
+				out.write('    </Track>'+ '\n')
+				out.write('   </Lap>'+ '\n')
+				out.write('  </Activity>'+ '\n')
+				out.write(' </Activities>'+ '\n')
+				out.write('</TrainingCenterDatabase>'+ '\n')
 				out.close()
